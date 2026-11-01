@@ -115,6 +115,10 @@ let view = 'home';
 let expCat = 'home';
 let logCat = 'all';
 let statTab = 'stats';
+let deferred = null, swOK = false;
+const standalone = () => matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); deferred = e; if (view === 'home' || view === 'settings') render(); });
+window.addEventListener('appinstalled', () => { deferred = null; toast('برنامه نصب شد'); render(); });
 
 const catOf = (id) => CATS.find((c) => c.id === id) || CATS[0];
 const grp = (cat, gid) => (S.groups[cat] || []).find((g) => g.id === gid) || { id: gid, name: 'بدون گروه', icon: '📦' };
@@ -195,6 +199,8 @@ function vHome() {
       <p class="sm mut" style="margin:0 0 10px">اول در بخش «ورودی» حقوق ماهانه‌تان را وارد کنید؛ بعد با دکمه‌ی ＋ مخارج را ثبت کنید. هر چه خرج کنید از ورودی کم می‌شود و باقی‌مانده پس‌انداز است.</p>
       <button class="btn" data-nav="inc">رفتن به ورودی</button></div>`;
   }
+  if (deferred && !standalone()) h += `<div class="info" style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+    <span>برنامه را روی گوشی نصب کنید</span><button class="btn sm" data-act="install">نصب</button></div>`;
   h += `<section class="hero ${r.savings < 0 ? 'bad' : ''}">
     <div class="lbl">پس‌انداز این ماه (ورودی − مخارج)</div>
     <div class="big">${m(r.savings, '', true)} <span class="unit">تومان</span></div>
@@ -364,8 +370,19 @@ function vStats() {
   return h;
 }
 
+function installCard() {
+  if (standalone()) return `<div class="card"><h3>📲 نصب روی گوشی</h3><p class="sm pos" style="margin:0">✅ برنامه نصب شده و در حالت برنامه باز است.</p></div>`;
+  const ok = (v) => (v ? '✅' : '❌');
+  const https = location.protocol === 'https:' || ['localhost', '127.0.0.1'].includes(location.hostname);
+  return `<div class="card"><h3>📲 نصب روی گوشی</h3>
+    ${deferred ? `<button class="btn" data-act="install">نصب برنامه</button>` : `<p class="sm" style="margin:0 0 6px">اگر دکمه‌ی نصب نمی‌آید: در <bdi>Chrome</bdi> منوی سه‌نقطه را بزنید و «نصب برنامه» (<bdi>Install app</bdi>) یا «افزودن به صفحه‌ی اصلی» (<bdi>Add to Home screen</bdi>) را انتخاب کنید.</p>`}
+    <div class="kv3" style="margin-top:8px"><div><span class="k">آدرس امن (https)</span><b>${ok(https)}</b></div>
+    <div><span class="k">سرویس‌ورکر</span><b>${ok(swOK)}</b></div></div>
+    <p class="hint" style="margin-bottom:0">نصب فقط وقتی کار می‌کند که برنامه را از آدرس https (مثلاً GitHub Pages) و داخل <b>Chrome</b> باز کنید؛ نه از داخل فایل زیپ، نه از مرورگر داخلی تلگرام/ایتا/بله.</p></div>`;
+}
+
 function vSettings() {
-  return `<div class="card"><h3>حقوق ماهانه (پیش‌فرض)</h3>
+  return installCard() + `<div class="card"><h3>حقوق ماهانه (پیش‌فرض)</h3>
     <div class="f"><input type="text" inputmode="numeric" class="amt" id="s-salary" value="${S.salary ? fa(S.salary) : ''}" placeholder="مثلاً ۲۰٬۰۰۰٬۰۰۰"></div>
     <p class="hint">برای یک ماه خاص (عیدی، اضافه‌کار) در بخش «ورودی» روی «حقوق» بزنید.</p></div>
   ${GCATS.map((c) => { const cc = catOf(c); return `<div class="card"><h3>${cc.icon} گروه‌های «${cc.name}»</h3>
@@ -829,6 +846,10 @@ const ACT = {
   editExp(el) { const t = S.exp.find((x) => x.id === el.dataset.id); if (t) expForm(t.cat, t); },
   save() { saveForm(); },
   del() { delForm(); },
+  install() {
+    if (!deferred) return toast('از منوی Chrome گزینه‌ی نصب برنامه را بزنید');
+    deferred.prompt(); deferred.userChoice.finally(() => { deferred = null; render(); });
+  },
   allowSheet(el) { allowSheet(el.dataset.id); },
   saveAllow(el) { S.allow[el.dataset.id] = num($('#f-amt').value); save(); closeSheet(); render(); toast('سهم ذخیره شد'); },
   planSheet() { planSheet(); },
@@ -878,6 +899,7 @@ render();
 if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+  navigator.serviceWorker.ready.then(() => { swOK = true; if (view === 'settings') render(); }).catch(() => {});
 }
 window.__app = { get S() { return S; }, calcMonth, monthBlocks, makePDF, render, setView(v) { view = v; render(); }, cur: () => cur };
 })();
