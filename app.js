@@ -116,6 +116,14 @@ let expCat = 'home';
 let logCat = 'all';
 let statTab = 'stats';
 let deferred = null, swOK = false;
+const chk = { man: null, ico: null };
+function runChecks() {
+  fetch('manifest.json', { cache: 'no-store' }).then((r) => (r.ok ? r.json() : Promise.reject()))
+    .then((j) => { chk.man = !!(j && Array.isArray(j.icons) && j.icons.length); }).catch(() => { chk.man = false; })
+    .finally(() => { if (view === 'settings' || view === 'home') render(); });
+  fetch('icon-512.png', { cache: 'no-store' }).then((r) => { chk.ico = r.ok; }).catch(() => { chk.ico = false; })
+    .finally(() => { if (view === 'settings' || view === 'home') render(); });
+}
 const standalone = () => matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
 window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); deferred = e; if (view === 'home' || view === 'settings') render(); });
 window.addEventListener('appinstalled', () => { deferred = null; toast('برنامه نصب شد'); render(); });
@@ -201,6 +209,7 @@ function vHome() {
   }
   if (deferred && !standalone()) h += `<div class="info" style="display:flex;justify-content:space-between;align-items:center;gap:8px">
     <span>برنامه را روی گوشی نصب کنید</span><button class="btn sm" data-act="install">نصب</button></div>`;
+  if ((chk.man === false || chk.ico === false) && !standalone()) h += `<div class="warnbox">برای نصب، فایل‌های manifest و آیکون‌ها روی سایت نیستند؛ هر ۸ فایل برنامه را کنار هم آپلود کنید (جزئیات در تنظیمات).</div>`;
   h += `<section class="hero ${r.savings < 0 ? 'bad' : ''}">
     <div class="lbl">پس‌انداز این ماه (ورودی − مخارج)</div>
     <div class="big">${m(r.savings, '', true)} <span class="unit">تومان</span></div>
@@ -377,7 +386,10 @@ function installCard() {
   return `<div class="card"><h3>📲 نصب روی گوشی</h3>
     ${deferred ? `<button class="btn" data-act="install">نصب برنامه</button>` : `<p class="sm" style="margin:0 0 6px">اگر دکمه‌ی نصب نمی‌آید: در <bdi>Chrome</bdi> منوی سه‌نقطه را بزنید و «نصب برنامه» (<bdi>Install app</bdi>) یا «افزودن به صفحه‌ی اصلی» (<bdi>Add to Home screen</bdi>) را انتخاب کنید.</p>`}
     <div class="kv3" style="margin-top:8px"><div><span class="k">آدرس امن (https)</span><b>${ok(https)}</b></div>
-    <div><span class="k">سرویس‌ورکر</span><b>${ok(swOK)}</b></div></div>
+    <div><span class="k">سرویس‌ورکر</span><b>${ok(swOK)}</b></div>
+    <div><span class="k">فایل manifest.json</span><b>${chk.man === null ? '…' : ok(chk.man)}</b></div>
+    <div><span class="k">فایل‌های آیکون</span><b>${chk.ico === null ? '…' : ok(chk.ico)}</b></div></div>
+    ${(chk.man === false || chk.ico === false) ? `<div class="warnbox" style="margin-top:8px">فایل‌های <b>manifest.json</b> یا آیکون‌ها (<bdi>icon-192.png</bdi> و <bdi>icon-512.png</bdi> و <bdi>icon-maskable-512.png</bdi>) کنار <bdi>index.html</bdi> روی سایت پیدا نشد. هر ۸ فایل را در یک پوشه آپلود کنید.</div>` : ''}
     <p class="hint" style="margin-bottom:0">نصب فقط وقتی کار می‌کند که برنامه را از آدرس https (مثلاً GitHub Pages) و داخل <b>Chrome</b> باز کنید؛ نه از داخل فایل زیپ، نه از مرورگر داخلی تلگرام/ایتا/بله.</p></div>`;
 }
 
@@ -896,6 +908,7 @@ document.addEventListener('keydown', (e) => {
 
 /* ---------- شروع ---------- */
 render();
+runChecks();
 if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
