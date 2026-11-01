@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0f766e">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>دفتر خرج</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app">
+  <header id="top"></header>
+  <main id="view"></main>
+  <button id="fab" class="fab" data-act="fab" aria-label="افزودن" hidden>＋</button>
+  <nav id="nav">
+    <button data-nav="home"><i>📊</i><span>خلاصه</span></button>
+    <button data-nav="inc"><i>📥</i><span>ورودی</span></button>
+    <button data-nav="exp"><i>📤</i><span>مخارج</span></button>
+    <button data-nav="stats"><i>📈</i><span>ریز و آمار</span></button>
+    <button data-nav="settings"><i>⚙️</i><span>تنظیمات</span></button>
+  </nav>
+</div>
+
+<div id="sheet" hidden>
+  <div class="backdrop" data-act="closeSheet"></div>
+  <div class="panel" role="dialog"></div>
+</div>
+<div id="toast" hidden></div>
+
+<script src="app.js"></script>
+</body>
+</html>
