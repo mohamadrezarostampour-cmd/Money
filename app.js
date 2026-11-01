@@ -64,12 +64,13 @@ const fullDate = (t) => `${fa(t.d)} ${MN[t.m - 1]} ${fy(t.y)}`;
 const cmp = (a, b) => (mk(a.y, a.m) - mk(b.y, b.m)) || (a.d - b.d) || ((a.ts || 0) - (b.ts || 0));
 
 /* ---------- داده ---------- */
-const fresh = () => ({ v: 2, salary: 0, salaryOv: {}, homeBudget: 0, homeItems: 1, groups: DEF_GROUPS(), inc: [], exp: [] });
+const fresh = () => ({ v: 2, salary: 0, salaryOv: {}, homeBudget: 0, homeItems: 1, allow: { me: 0, wife: 0 }, groups: DEF_GROUPS(), inc: [], exp: [] });
 function fix(r) {
   r.salaryOv = r.salaryOv || {}; r.inc = r.inc || []; r.exp = r.exp || [];
   r.groups = r.groups || DEF_GROUPS();
   GCATS.forEach((c) => { if (!Array.isArray(r.groups[c])) r.groups[c] = DEF_GROUPS()[c]; });
   r.homeBudget = r.homeBudget || 0;
+  r.allow = Object.assign({ me: 0, wife: 0 }, r.allow || {});
   if (!r.homeItems) {   // نسخه‌ی قبل: اقلام پیش‌فرض خانه را (یک بار) اضافه کن
     const have = new Set(r.groups.home.map((g) => g.id));
     DEF_GROUPS().home.forEach((g) => { if (!have.has(g.id)) r.groups.home.splice(Math.max(0, r.groups.home.length - 1), 0, g); });
@@ -147,7 +148,9 @@ function calcMonth(y, mo) {
   }).filter((x) => x.plan || x.spent).sort((a, b) => (b.plan > 0) - (a.plan > 0));
   const alloc = sum(hp.map((x) => ({ amount: x.plan })));
   const homePlan = { budget: S.homeBudget || 0, alloc, rows: hp, spent: byCat.home, left: (S.homeBudget || 0) - byCat.home };
-  return { y, m: mo, k, salary, recv, recvT, incT, exps, expT, byCat, cnt, homePlan, savings: incT - expT,
+  const allow = {};
+  ['me', 'wife'].forEach((c) => { const b = S.allow[c] || 0; allow[c] = { budget: b, spent: byCat[c], left: b - byCat[c] }; });
+  return { y, m: mo, k, salary, recv, recvT, incT, exps, expT, byCat, cnt, homePlan, allow, savings: incT - expT,
            groups: arr(gAll), groupsByCat: gc, days, avg: expT / days,
            top: exps.slice().sort((a, b) => b.amount - a.amount).slice(0, 5) };
 }
@@ -229,6 +232,7 @@ function vExp() {
   h += `<div class="cbs">${CATS.map((x) => `<button class="cb ${x.id === expCat ? 'on' : ''}" style="--c:${x.color}" data-act="pickCat" data-id="${x.id}">
     <i>${x.icon}</i><b>${x.name}</b><span>${m(-r.byCat[x.id])}</span></button>`).join('')}</div>`;
   if (expCat === 'home') h += homePlanCard(r);
+  if (expCat === 'me' || expCat === 'wife') h += allowCard(r, expCat);
   const list = r.exps.filter((t) => t.cat === expCat);
   h += `<div class="sec-h"><h3>${c.icon} ${c.name}</h3><span class="sm">${m(-sum(list), 'neg')} <span class="mut">تومان</span></span></div>`;
   if (GCATS.includes(expCat) && r.groupsByCat[expCat]) {
@@ -247,6 +251,33 @@ function planRow(x) {
     ${x.plan ? `<div class="bar ${over ? 'over' : ''}"><i style="width:${p}%"></i></div>
     <div class="sm ${over ? 'neg' : 'mut'}">${over ? `${m(x.spent - x.plan)} بیشتر از برنامه` : `مانده: ${m(x.left)}`}</div>` : ''}</div>`;
 }
+function allowCard(r, cat) {
+  const a = r.allow[cat], c = catOf(cat);
+  const who = cat === 'me' ? 'خودم' : 'همسر';
+  if (!a.budget) {
+    return `<div class="card"><h3>💰 سهم ماهانه‌ی ${who}</h3>
+      <p class="sm mut" style="margin:0 0 10px">یک مبلغ ثابت برای ${who} تعیین کنید تا هر خرج از آن کم شود و مانده‌اش را ببینید.</p>
+      <button class="btn" data-act="allowSheet" data-id="${cat}">تعیین سهم ${who}</button></div>`;
+  }
+  const over = a.spent > a.budget, p = Math.min(100, Math.round(a.spent / a.budget * 100));
+  return `<div class="card"><div class="row"><h3 style="margin:0">💰 سهم ماهانه‌ی ${who}</h3>
+    <button class="btn sm sec" data-act="allowSheet" data-id="${cat}">ویرایش</button></div>
+    <div class="kv3" style="margin-top:8px">
+      <div><span class="k">سهم ماه</span><b>${m(a.budget)}</b></div>
+      <div><span class="k">خرج‌شده</span><b class="${over ? 'neg' : ''}">${m(a.spent)}</b></div>
+      <div style="grid-column:1/-1"><span class="k">${over ? 'بیشتر از سهم' : 'مانده'}</span><b class="${over ? 'neg' : 'pos'}">${m(Math.abs(a.left))}</b></div></div>
+    <div class="bar ${over ? 'over' : ''}" style="margin:8px 0 2px"><i style="width:${p}%;${over ? '' : `background:${c.color}`}"></i></div>
+    <div class="sm mut">${pct(a.spent, a.budget)} از سهم مصرف شده</div></div>`;
+}
+function allowSheet(cat) {
+  const who = cat === 'me' ? 'خودم' : 'همسر';
+  openSheet(`<h2>💰 سهم ماهانه‌ی ${who}</h2>
+    <div class="f"><label>مبلغ پیش‌فرض هر ماه (تومان)</label><input type="text" inputmode="numeric" id="f-amt" class="amt" value="${S.allow[cat] ? fa(S.allow[cat]) : ''}" placeholder="مثلاً ۲٬۰۰۰٬۰۰۰"></div>
+    <p class="hint">این مبلغ برای همه‌ی ماه‌ها یکسان است. خرج‌های «${who}» از آن کم می‌شوند؛ صفر یعنی بدون سهم.</p>
+    <div class="btns"><button class="btn" data-act="saveAllow" data-id="${cat}">ذخیره</button></div>`,
+    () => setTimeout(() => $('#f-amt')?.focus(), 260));
+}
+
 function homePlanCard(r) {
   const hp = r.homePlan;
   if (!hp.budget && !hp.alloc) {
@@ -307,6 +338,14 @@ function vStats() {
     <div style="grid-column:1/-1"><span class="k">میانگین خرج روزانه (${fa(r.days)} روز)</span><b>${m(r.avg)}</b></div></div></div>`;
   if (!r.expT) return h + `<div class="empty"><b>📈</b>برای دیدن آمار، چند خرج ثبت کنید.</div>`;
   if (r.homePlan.budget || r.homePlan.alloc) h += homePlanCard(r).replace('data-act="planSheet"', 'data-act="planSheet"');
+  if (r.allow.me.budget || r.allow.wife.budget) {
+    h += `<div class="card"><h3>سهم شخصی (خودم و همسر)</h3>${['me', 'wife'].filter((c) => r.allow[c].budget).map((c) => {
+      const a = r.allow[c], cc = catOf(c), over = a.spent > a.budget;
+      return `<div class="pl ${over ? 'over' : ''}"><div class="top"><span class="nm">${cc.icon} ${cc.name}</span><span class="sm">${m(a.spent)} <span class="mut">از</span> ${m(a.budget)}</span></div>
+        <div class="bar ${over ? 'over' : ''}"><i style="width:${Math.min(100, Math.round(a.spent / a.budget * 100))}%"></i></div>
+        <div class="sm ${over ? 'neg' : 'mut'}">${over ? `${m(a.spent - a.budget)} بیشتر از سهم` : `مانده: ${m(a.left)}`}</div></div>`;
+    }).join('')}</div>`;
+  }
   h += `<div class="card"><h3>سهم هر بخش از مخارج</h3>${CATS.filter((c) => r.byCat[c.id]).map((c) => share(c.name, c.icon, r.byCat[c.id], r.expT, c.color, '', '', -1)).join('')}</div>`;
   if (r.groups.length) {
     const gt = sum(r.groups);
@@ -530,6 +569,10 @@ function saveForm() {
     const x = calcMonth(rec.y, rec.m).homePlan.rows.find((r) => r.g.id === rec.group);
     if (x && x.plan && x.spent > x.plan) msg = `⚠️ ثبت شد؛ «${x.g.name}» ${fa(x.spent - x.plan)} تومان بیشتر از برنامه شد`;
   }
+  if ((rec.cat === 'me' || rec.cat === 'wife')) {
+    const a = calcMonth(rec.y, rec.m).allow[rec.cat];
+    if (a.budget && a.spent > a.budget) msg = `⚠️ ثبت شد؛ از سهم ${rec.cat === 'me' ? 'خودم' : 'همسر'} ${fa(a.spent - a.budget)} تومان بیشتر خرج شد`;
+  }
   closeSheet(); render(); toast(msg);
 }
 function delForm() {
@@ -649,6 +692,12 @@ function monthBlocks(y, mo) {
     if (r.groupsByCat[c.id]) {
       B.push(blk(`<h2>مصرف ${c.name} به تفکیک گروه</h2>` + tbl(['گروه', 'تعداد', 'مبلغ', `سهم از ${c.name}`],
         r.groupsByCat[c.id].map((g) => tr([esc(g.name), fa(g.count), N(-g.total, 'neg'), pct(g.total, total)])))));
+    }
+    if ((c.id === 'me' || c.id === 'wife') && r.allow[c.id].budget) {
+      const a = r.allow[c.id];
+      B.push(blk(`<h2>سهم ماهانه‌ی ${c.name}</h2>` + tbl(['شرح', 'مبلغ'], [
+        tr(['سهم ماه', N(a.budget)]), tr(['خرج‌شده', N(-a.spent, 'neg')]),
+        tr([a.left < 0 ? 'بیشتر از سهم' : 'مانده‌ی سهم', N(a.left, a.left < 0 ? 'neg' : 'pos')], 't')])));
     }
     if (c.id === 'home' && (r.homePlan.budget || r.homePlan.alloc)) {
       const hp = r.homePlan;
@@ -780,6 +829,8 @@ const ACT = {
   editExp(el) { const t = S.exp.find((x) => x.id === el.dataset.id); if (t) expForm(t.cat, t); },
   save() { saveForm(); },
   del() { delForm(); },
+  allowSheet(el) { allowSheet(el.dataset.id); },
+  saveAllow(el) { S.allow[el.dataset.id] = num($('#f-amt').value); save(); closeSheet(); render(); toast('سهم ذخیره شد'); },
   planSheet() { planSheet(); },
   savePlan() { readPlan($('.panel')); save(); closeSheet(); render(); toast('برنامه‌ی خانه ذخیره شد'); },
   addPlanItem() {
